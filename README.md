@@ -18,12 +18,12 @@ Optimizado para desplegarse en **Fly.io** con un contenedor ligero basado en Alp
 
 ## 📁 Estructura del proyecto
 
+```text
 contact-service/
-│
 ├── main.go
 ├── go.mod
 ├── Dockerfile
-└── fly.tom
+└── fly.toml
 
 ---
 
