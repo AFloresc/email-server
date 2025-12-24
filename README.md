@@ -18,7 +18,12 @@ Optimizado para desplegarse en **Fly.io** con un contenedor ligero basado en Alp
 
 ## 📁 Estructura del proyecto
 
-contact-service/ │ ├── main.go ├── go.mod ├── Dockerfile └── fly.tom
+contact-service/
+│
+├── main.go
+├── go.mod
+├── Dockerfile
+└── fly.tom
 
 ---
 
