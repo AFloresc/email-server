@@ -24,6 +24,7 @@ contact-service/
 ├── go.mod
 ├── Dockerfile
 └── fly.toml
+```
 
 ---
 
