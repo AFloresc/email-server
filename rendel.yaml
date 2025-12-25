@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: contact-service
+    env: go
+    buildCommand: "go build -o server ."
+    startCommand: "./server"
+    plan: free
+    envVars:
+      - key: PORT
+        value: 8080
