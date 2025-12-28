@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/rs/cors"
+
 	"github.com/resendlabs/resend-go"
 )
 
@@ -17,7 +19,16 @@ type ContactRequest struct {
 }
 
 func main() {
-	http.HandleFunc("/contact", handleContact)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/contact", handleContact)
+
+	// ✅ CORS middleware
+	corsHandler := cors.New(cors.Options{
+		AllowedOrigins:   []string{"http://localhost:5173"},
+		AllowedMethods:   []string{"POST", "OPTIONS"},
+		AllowedHeaders:   []string{"Content-Type"},
+		AllowCredentials: true,
+	}).Handler(mux)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -25,7 +36,7 @@ func main() {
 	}
 
 	log.Println("Server running on port", port)
-	log.Fatal(http.ListenAndServe(":"+port, nil))
+	log.Fatal(http.ListenAndServe(":"+port, corsHandler))
 }
 
 func handleContact(w http.ResponseWriter, r *http.Request) {
