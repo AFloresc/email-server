@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/smtp"
 	"os"
+
+	"github.com/resendlabs/resend-go"
 )
 
 type ContactRequest struct {
@@ -44,8 +45,8 @@ func handleContact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := sendEmail(req); err != nil {
-		log.Println("SMTP error:", err)
+	if err := sendEmailResend(req); err != nil {
+		log.Println("Resend error:", err)
 		http.Error(w, "Failed to send email", http.StatusInternalServerError)
 		return
 	}
@@ -56,29 +57,27 @@ func handleContact(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func sendEmail(req ContactRequest) error {
-	smtpHost := os.Getenv("SMTP_HOST")
-	smtpPort := os.Getenv("SMTP_PORT")
-	smtpUser := os.Getenv("SMTP_USER")
-	smtpPass := os.Getenv("SMTP_PASS")
+func sendEmailResend(req ContactRequest) error {
+	apiKey := os.Getenv("RESEND_API_KEY")
 	toEmail := os.Getenv("TO_EMAIL")
 
-	auth := smtp.PlainAuth("", smtpUser, smtpPass, smtpHost)
+	client := resend.NewClient(apiKey)
 
-	body := fmt.Sprintf(
-		"New contact message:\n\nName: %s\nEmail: %s\nMessage:\n%s",
-		req.Name, req.Email, req.Message,
-	)
+	params := &resend.SendEmailRequest{
+		From:    "Portfolio Contact <onboarding@resend.dev>",
+		To:      []string{toEmail},
+		Subject: "Nuevo mensaje de contacto",
+		Text: fmt.Sprintf(
+			"Nombre: %s\nEmail: %s\nMensaje:\n%s",
+			req.Name, req.Email, req.Message,
+		),
+	}
 
-	msg := []byte("Subject: New Contact Message\r\n" +
-		"Content-Type: text/plain; charset=utf-8\r\n\r\n" +
-		body)
-
-	return smtp.SendMail(
-		smtpHost+":"+smtpPort,
-		auth,
-		smtpUser,
-		[]string{toEmail},
-		msg,
-	)
+	res, err := client.Emails.Send(params)
+	if err != nil {
+		log.Printf("Resend error: %v\n", err)
+		return err
+	}
+	log.Printf("Resend response: %+v\n", res)
+	return nil
 }
