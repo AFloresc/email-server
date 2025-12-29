@@ -1,18 +1,19 @@
-# 📬 Contact Service (Go + SMTP + Fly.io)
+# 📬 Email Server (Go + Resend + Render)
 
-Servicio backend minimalista escrito en **Go**, diseñado para recibir mensajes desde un formulario web y enviarlos por correo electrónico utilizando **SMTP**.  
-Optimizado para desplegarse en **Fly.io** con un contenedor ligero basado en Alpine.
+Servicio backend minimalista escrito en Go, diseñado para recibir mensajes desde el formulario de tu portfolio y enviarlos mediante Resend API.
+Optimizado para desplegarse en Render con un servidor ligero y seguro.
 
 ---
 
 ## 🚀 Características
 
-- Endpoint `POST /contact` para recibir mensajes JSON.
+- Endpoint POST /contact para recibir mensajes JSON.
 - Validación básica de campos (`name`, `email`, `message`).
-- Envío de correos mediante **SMTP** (Gmail, Outlook, Mailgun, etc.).
-- Configuración segura mediante **Fly.io Secrets**.
-- Dockerfile optimizado para despliegues rápidos.
-- Código simple, mantenible y sin dependencias externas.
+- Envío de correos mediante Resend (HTML + texto plano).
+- Soporte para Reply‑To dinámico.
+- Middleware CORS para permitir peticiones desde tu frontend.
+- Logs claros para depuración en Render.
+- Código simple, modular y mantenible.
 
 ---
 
@@ -22,8 +23,7 @@ Optimizado para desplegarse en **Fly.io** con un contenedor ligero basado en Alp
 contact-service/
 ├── main.go
 ├── go.mod
-├── Dockerfile
-└── fly.toml
+└── Dockerfile
 ```
 
 ---
@@ -31,12 +31,23 @@ contact-service/
 ## 🔧 Requisitos previos
 
 - Go 1.22+
+- Cuenta en Resend (API Key)
 - Docker
-- Cuenta en Fly.io (`flyctl` instalado)
-- Credenciales SMTP válidas  
-  (Gmail requiere **App Password**, no la contraseña normal)
+- Cuenta en Render (para el deploy)
+- Variables de entorno configuradas
+
+```text
+RESEND_API_KEY=tu_api_key
+TO_EMAIL=tu_correo_destino
+PORT=8080 (Render lo inyecta automáticamente)
+
+```
 
 ---
+
+## ⚙️ Configuración de entorno en Render
+
+En Render → Dashboard → Environment Variables, añade:
 
 ## 📡 API
 
@@ -57,3 +68,60 @@ Respuesta exitosa
 {
   "status": "ok"
 }
+
+Respuesta de error
+{
+  "error": "Failed to send email"
+}
+```
+
+## 📨 Envío de correo
+
+El backend envía:
+
+- HTML premium con tu branding
+- Texto plano para compatibilidad
+- Reply‑To con el email del usuario
+- Logs del resultado de Resend
+
+## 🛡️ CORS
+
+Permitido para:
+
+```text
+http://localhost:5173
+```
+
+Puedes añadir más orígenes según despliegues.
+
+## ▶️ Ejecutar en local
+
+```text
+go run main.go
+```
+
+## 🚀 Deploy en Render
+
+- Crear nuevo servicio → Web Service
+- Seleccionar tu repo
+- Runtime: Go
+- Build Command:
+
+```text
+    go build -o server .
+```
+
+- Start Command:
+
+```text
+    ./server
+```
+
+- Añadir variables de entorno
+- Deploy
+
+## 📜 Licencia
+
+MIT — libre para usar y modificar.
+
+---
