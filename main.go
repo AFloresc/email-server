@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -56,7 +57,11 @@ func main() {
 		port = "8080"
 	}
 
-	log.Println("Server running on port", port)
+	// JSON logs
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
+
+	slog.Info("Server running", "port", port)
 	log.Fatal(http.ListenAndServe(":"+port, corsHandler))
 }
 
@@ -75,6 +80,7 @@ func handleContact(w http.ResponseWriter, r *http.Request) {
 
 	// Cooldown of 30 seconds
 	if !checkCooldown(ipHash, 30*time.Second) {
+		slog.Warn("Cooldown active", "ipHash", ipHash)
 		http.Error(w, "Please wait before sending another message", http.StatusTooManyRequests)
 		return
 	}
@@ -86,26 +92,29 @@ func handleContact(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := validateContact(req); err != nil {
-		log.Println("Validation error:", err)
+		slog.Warn("Validation error", "error", err.Error())
 		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
 
 	if req.Website != "" {
 		// Honeypot actrivated → bot detected
-		log.Println("Honeypot triggered — bot blocked")
+		slog.Warn("Honeypot triggered", "ipHash", ipHash)
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
 	if err := sendEmailResend(req); err != nil {
-		log.Println("Failed to send email:", err)
+		slog.Error("Failed to send email", "error", err.Error(), "ipHash", ipHash)
 		http.Error(w, "Failed to send email", http.StatusInternalServerError)
 		return
 	}
 
+	slog.Info("Email sent successfully", "ipHash", ipHash, "email", req.Email)
+
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"status":"ok"}`))
+
 }
 
 func sendEmailResend(req ContactRequest) error {
