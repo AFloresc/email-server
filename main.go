@@ -1,10 +1,13 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"regexp"
@@ -68,10 +71,10 @@ func handleContact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ip := r.RemoteAddr
+	ipHash := hashIP(r.RemoteAddr)
 
 	// Cooldown of 30 seconds
-	if !checkCooldown(ip, 30*time.Second) {
+	if !checkCooldown(ipHash, 30*time.Second) {
 		http.Error(w, "Please wait before sending another message", http.StatusTooManyRequests)
 		return
 	}
@@ -255,4 +258,14 @@ func checkCooldown(ip string, cooldown time.Duration) bool {
 
 	lastRequestTime[ip] = time.Now()
 	return true
+}
+
+func hashIP(remoteAddr string) string {
+	ip, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		ip = remoteAddr // fallback
+	}
+
+	hash := sha256.Sum256([]byte(ip))
+	return hex.EncodeToString(hash[:])
 }
