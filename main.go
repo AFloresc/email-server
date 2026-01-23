@@ -6,9 +6,11 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
 
 	"github.com/resendlabs/resend-go"
 	"github.com/rs/cors"
+	"golang.org/x/time/rate"
 )
 
 type ContactRequest struct {
@@ -17,11 +19,17 @@ type ContactRequest struct {
 	Message string `json:"message"`
 }
 
+// Rate limit variables
+var visitors = make(map[string]*rate.Limiter)
+var mu sync.Mutex
+
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/contact", handleContact)
 
-	// CORS para desarrollo local
+	handler := rateLimitMiddleware(mux)
+
+	// CORS para desarrollo local y deploy
 	corsHandler := cors.New(cors.Options{
 		AllowedOrigins: []string{
 			"http://localhost:5173",
@@ -29,8 +37,8 @@ func main() {
 		},
 		AllowedMethods:   []string{"POST", "OPTIONS"},
 		AllowedHeaders:   []string{"Content-Type"},
-		AllowCredentials: true,
-	}).Handler(mux)
+		AllowCredentials: false,
+	}).Handler(handler)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -114,4 +122,31 @@ func sendEmailResend(req ContactRequest) error {
 
 	log.Printf("Resend response: %+v\n", res)
 	return nil
+}
+
+// Rate limit function
+func getVisitor(ip string) *rate.Limiter {
+	mu.Lock()
+	defer mu.Unlock()
+
+	limiter, exists := visitors[ip]
+	if !exists {
+		limiter = rate.NewLimiter(1, 3) // 1 request/sec, burst of 3
+		visitors[ip] = limiter
+	}
+	return limiter
+}
+
+func rateLimitMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ip := r.RemoteAddr
+
+		limiter := getVisitor(ip)
+		if !limiter.Allow() {
+			http.Error(w, "Too many requests", http.StatusTooManyRequests)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
