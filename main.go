@@ -18,6 +18,7 @@ type ContactRequest struct {
 	Name    string `json:"name"`
 	Email   string `json:"email"`
 	Message string `json:"message"`
+	Website string `json:"website"` // honeypot
 }
 
 // Rate limit variables
@@ -62,6 +63,13 @@ func handleContact(w http.ResponseWriter, r *http.Request) {
 	var req ContactRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Website != "" {
+		// Honeypot actrivated → bot detected
+		log.Println("Honeypot triggered — bot blocked")
+		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
