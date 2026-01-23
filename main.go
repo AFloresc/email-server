@@ -37,6 +37,21 @@ var mu sync.Mutex
 var lastRequestTime = make(map[string]time.Time)
 var cooldownMu sync.Mutex
 
+// Blocked User-Agens
+var blockedUserAgents = []string{
+	"curl",
+	"wget",
+	"python",
+	"python-requests",
+	"httpclient",
+	"java",
+	"libwww",
+	"go-http-client",
+	"bot",
+	"spider",
+	"crawler",
+}
+
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/contact", handleContact)
@@ -73,6 +88,14 @@ func handleContact(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Block by User-Agent
+	ua := r.Header.Get("User-Agent")
+	if ua == "" || isSuspiciousUserAgent(ua) {
+		slog.Warn("Suspicious User-Agent blocked", "userAgent", ua)
+		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
@@ -286,4 +309,15 @@ func hashIP(remoteAddr string) string {
 
 	hash := sha256.Sum256([]byte(ip))
 	return hex.EncodeToString(hash[:])
+}
+
+// Checks susicous User Agents
+func isSuspiciousUserAgent(ua string) bool {
+	ua = strings.ToLower(ua)
+	for _, blocked := range blockedUserAgents {
+		if strings.Contains(ua, blocked) {
+			return true
+		}
+	}
+	return false
 }
