@@ -2,10 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -63,6 +65,12 @@ func handleContact(w http.ResponseWriter, r *http.Request) {
 	var req ContactRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if err := validateContact(req); err != nil {
+		log.Println("Validation error:", err)
+		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
 
@@ -156,4 +164,33 @@ func rateLimitMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// Fields validator
+func validateContact(req ContactRequest) error {
+	// Honeypot
+	if req.Website != "" {
+		return errors.New("bot detected")
+	}
+
+	// Name
+	req.Name = strings.TrimSpace(req.Name)
+	if len(req.Name) < 2 || len(req.Name) > 80 {
+		return errors.New("invalid name")
+	}
+
+	// Email
+	req.Email = strings.TrimSpace(req.Email)
+	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
+	if !emailRegex.MatchString(req.Email) {
+		return errors.New("invalid email")
+	}
+
+	// Message
+	req.Message = strings.TrimSpace(req.Message)
+	if len(req.Message) < 10 || len(req.Message) > 2000 {
+		return errors.New("invalid message")
+	}
+
+	return nil
 }
