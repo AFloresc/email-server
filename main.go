@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/resendlabs/resend-go"
@@ -28,13 +29,11 @@ func main() {
 	mux.HandleFunc("/contact", handleContact)
 
 	handler := rateLimitMiddleware(mux)
+	allowedOrigins := strings.Split(os.Getenv("ALLOWED_ORIGINS"), ",")
 
 	// CORS para desarrollo local y deploy
 	corsHandler := cors.New(cors.Options{
-		AllowedOrigins: []string{
-			"http://localhost:5173",
-			"https://cheery-concha-07b133.netlify.app",
-		},
+		AllowedOrigins:   allowedOrigins,
 		AllowedMethods:   []string{"POST", "OPTIONS"},
 		AllowedHeaders:   []string{"Content-Type"},
 		AllowCredentials: false,
