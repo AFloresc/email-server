@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 	"unicode"
 
 	"github.com/resendlabs/resend-go"
@@ -27,6 +28,10 @@ type ContactRequest struct {
 // Rate limit variables
 var visitors = make(map[string]*rate.Limiter)
 var mu sync.Mutex
+
+// Cooldown maps
+var lastRequestTime = make(map[string]time.Time)
+var cooldownMu sync.Mutex
 
 func main() {
 	mux := http.NewServeMux()
@@ -60,6 +65,14 @@ func handleContact(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	ip := r.RemoteAddr
+
+	// Cooldown of 30 seconds
+	if !checkCooldown(ip, 30*time.Second) {
+		http.Error(w, "Please wait before sending another message", http.StatusTooManyRequests)
 		return
 	}
 
@@ -223,4 +236,23 @@ func sanitize(input string) string {
 	cleaned = spaceRegex.ReplaceAllString(cleaned, " ")
 
 	return cleaned
+}
+
+// Check cooldown by IP - cooldown seconds wait for every IP between requests
+func checkCooldown(ip string, cooldown time.Duration) bool {
+	cooldownMu.Lock()
+	defer cooldownMu.Unlock()
+
+	lastTime, exists := lastRequestTime[ip]
+	if !exists {
+		lastRequestTime[ip] = time.Now()
+		return true
+	}
+
+	if time.Since(lastTime) < cooldown {
+		return false
+	}
+
+	lastRequestTime[ip] = time.Now()
+	return true
 }
