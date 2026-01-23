@@ -125,3 +125,43 @@ go run main.go
 MIT — libre para usar y modificar.
 
 ---
+
+## 🛡️ Protecciones incluidas
+
+✔ SQL injection
+
+```text
+  SELECT * FROM users
+  ' OR '1'='1
+  DROP TABLE
+```
+
+✔ XSS
+
+```text
+  <script>alert(1)</script>
+  onerror=alert(1)
+```
+
+✔ Directory traversal
+
+```text
+  ../../etc/passwd
+```
+
+✔ Command injection
+
+```text
+  rm -rf /
+  $(curl ...)
+```
+
+✔ Payloads codificados
+
+```text
+  %3Cscript%3E
+```
+
+✔ Bots que envían patrones típicos de ataque
+
+---
