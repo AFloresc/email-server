@@ -52,6 +52,16 @@ var blockedUserAgents = []string{
 	"crawler",
 }
 
+// Attack patterns XSS , SQLi, Directory traversal, Command injection and malicious encoding
+var attackPatterns = []string{
+	"<script", "</script", "javascript:",
+	"onerror=", "onload=", "alert(",
+	"SELECT ", "INSERT ", "UPDATE ", "DELETE ", "DROP ",
+	"UNION ", " OR 1=1", "--", ";--", "' OR '1'='1",
+	"../", "..\\", "%00", "%3C", "%3E",
+	"$(", "`", "|", "&&", "||",
+}
+
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/contact", handleContact)
@@ -125,7 +135,13 @@ func handleContact(w http.ResponseWriter, r *http.Request) {
 
 	// Strong validation
 	if err := validateContact(req); err != nil {
-		slog.Warn("Validation error", "error", err.Error())
+		if err.Error() == "malicious pattern detected" {
+			slog.Warn("Attack pattern blocked", "ipHash", ipHash)
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+
+		slog.Warn("Validation error", "error", err.Error(), "ipHash", ipHash)
 		http.Error(w, "Invalid input", http.StatusBadRequest)
 		return
 	}
@@ -255,6 +271,13 @@ func validateContact(req ContactRequest) error {
 		return errors.New("invalid message")
 	}
 
+	// Basic firewall for attack patterns
+	if containsAttackPattern(req.Name) ||
+		containsAttackPattern(req.Email) ||
+		containsAttackPattern(req.Message) {
+		return errors.New("malicious pattern detected")
+	}
+
 	return nil
 }
 
@@ -316,6 +339,17 @@ func isSuspiciousUserAgent(ua string) bool {
 	ua = strings.ToLower(ua)
 	for _, blocked := range blockedUserAgents {
 		if strings.Contains(ua, blocked) {
+			return true
+		}
+	}
+	return false
+}
+
+// Check dangoerous patterns
+func containsAttackPattern(input string) bool {
+	lower := strings.ToLower(input)
+	for _, pattern := range attackPatterns {
+		if strings.Contains(lower, strings.ToLower(pattern)) {
 			return true
 		}
 	}
