@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"unicode"
 
 	"github.com/resendlabs/resend-go"
 	"github.com/rs/cors"
@@ -173,6 +174,11 @@ func validateContact(req ContactRequest) error {
 		return errors.New("bot detected")
 	}
 
+	// Sanitize inputs
+	req.Name = sanitize(req.Name)
+	req.Email = sanitize(req.Email)
+	req.Message = sanitize(req.Message)
+
 	// Name
 	req.Name = strings.TrimSpace(req.Name)
 	if len(req.Name) < 2 || len(req.Name) > 80 {
@@ -193,4 +199,28 @@ func validateContact(req ContactRequest) error {
 	}
 
 	return nil
+}
+
+// Code injection
+func sanitize(input string) string {
+	// Trim spaces
+	cleaned := strings.TrimSpace(input)
+
+	// Remove HTML tags
+	tagRegex := regexp.MustCompile(`<.*?>`)
+	cleaned = tagRegex.ReplaceAllString(cleaned, "")
+
+	// Remove control characters
+	cleaned = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) && r != '\n' && r != '\r' {
+			return -1
+		}
+		return r
+	}, cleaned)
+
+	// Collapse multiple spaces
+	spaceRegex := regexp.MustCompile(`\s+`)
+	cleaned = spaceRegex.ReplaceAllString(cleaned, " ")
+
+	return cleaned
 }
