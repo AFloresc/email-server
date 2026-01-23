@@ -85,12 +85,22 @@ func handleContact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Add limit of 100KB to body - denied huge payloads
+	r.Body = http.MaxBytesReader(w, r.Body, 100*1024)
+
 	var req ContactRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err.Error() == "http: request body too large" {
+			slog.Warn("Payload too large", "ipHash", ipHash)
+			http.Error(w, "Payload too large", http.StatusRequestEntityTooLarge)
+			return
+		}
+		slog.Warn("Invalid JSON body", "error", err.Error(), "ipHash", ipHash)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
+	// Strong validation
 	if err := validateContact(req); err != nil {
 		slog.Warn("Validation error", "error", err.Error())
 		http.Error(w, "Invalid input", http.StatusBadRequest)
@@ -114,7 +124,6 @@ func handleContact(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"status":"ok"}`))
-
 }
 
 func sendEmailResend(req ContactRequest) error {
