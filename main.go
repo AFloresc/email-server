@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 
@@ -62,9 +63,28 @@ var attackPatterns = []string{
 	"$(", "`", "|", "&&", "||",
 }
 
+// Internal metrics
+type Metrics struct {
+	TotalRequests       int64
+	SuccessfulRequests  int64
+	ValidationErrors    int64
+	HoneypotBlocks      int64
+	FirewallBlocks      int64
+	RateLimitBlocks     int64
+	CooldownBlocks      int64
+	UserAgentBlocks     int64
+	PayloadTooLarge     int64
+	EmailSendErrors     int64
+	TotalProcessingTime int64 // in ms
+}
+
+var metrics = &Metrics{}
+var metricsMu sync.Mutex
+
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/contact", handleContact)
+	mux.HandleFunc("/metrics", metricsHandler)
 
 	handler := rateLimitMiddleware(mux)
 	allowedOrigins := strings.Split(os.Getenv("ALLOWED_ORIGINS"), ",")
@@ -104,6 +124,7 @@ func handleContact(w http.ResponseWriter, r *http.Request) {
 	// Block by User-Agent
 	ua := r.Header.Get("User-Agent")
 	if ua == "" || isSuspiciousUserAgent(ua) {
+		inc(&metrics.UserAgentBlocks)
 		slog.Warn("Suspicious User-Agent blocked", "userAgent", ua)
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
@@ -113,6 +134,7 @@ func handleContact(w http.ResponseWriter, r *http.Request) {
 
 	// Cooldown of 30 seconds
 	if !checkCooldown(ipHash, 30*time.Second) {
+		inc(&metrics.CooldownBlocks)
 		slog.Warn("Cooldown active", "ipHash", ipHash)
 		http.Error(w, "Please wait before sending another message", http.StatusTooManyRequests)
 		return
@@ -124,6 +146,7 @@ func handleContact(w http.ResponseWriter, r *http.Request) {
 	var req ContactRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		if err.Error() == "http: request body too large" {
+			inc(&metrics.PayloadTooLarge)
 			slog.Warn("Payload too large", "ipHash", ipHash)
 			http.Error(w, "Payload too large", http.StatusRequestEntityTooLarge)
 			return
@@ -148,6 +171,7 @@ func handleContact(w http.ResponseWriter, r *http.Request) {
 
 	if req.Website != "" {
 		// Honeypot actrivated → bot detected
+		inc(&metrics.HoneypotBlocks)
 		slog.Warn("Honeypot triggered", "ipHash", ipHash)
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
@@ -155,6 +179,7 @@ func handleContact(w http.ResponseWriter, r *http.Request) {
 
 	if err := sendEmailResend(req); err != nil {
 		slog.Error("Failed to send email", "error", err.Error(), "ipHash", ipHash)
+		inc(&metrics.EmailSendErrors)
 		http.Error(w, "Failed to send email", http.StatusInternalServerError)
 		return
 	}
@@ -232,6 +257,7 @@ func rateLimitMiddleware(next http.Handler) http.Handler {
 
 		limiter := getVisitor(ip)
 		if !limiter.Allow() {
+			inc(&metrics.RateLimitBlocks)
 			http.Error(w, "Too many requests", http.StatusTooManyRequests)
 			return
 		}
@@ -354,4 +380,45 @@ func containsAttackPattern(input string) bool {
 		}
 	}
 	return false
+}
+
+// Metrics functions
+func inc(counter *int64) {
+	atomic.AddInt64(counter, 1)
+}
+
+func addTime(ms int64) {
+	atomic.AddInt64(&metrics.TotalProcessingTime, ms)
+}
+
+func metricsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+
+		inc(&metrics.TotalRequests)
+
+		next.ServeHTTP(w, r)
+
+		duration := time.Since(start).Milliseconds()
+		addTime(duration)
+	})
+}
+
+func metricsHandler(w http.ResponseWriter, r *http.Request) {
+	metricsMu.Lock()
+	defer metricsMu.Unlock()
+
+	w.Header().Set("Content-Type", "text/plain")
+
+	fmt.Fprintf(w, "total_requests %d\n", metrics.TotalRequests)
+	fmt.Fprintf(w, "successful_requests %d\n", metrics.SuccessfulRequests)
+	fmt.Fprintf(w, "validation_errors %d\n", metrics.ValidationErrors)
+	fmt.Fprintf(w, "honeypot_blocks %d\n", metrics.HoneypotBlocks)
+	fmt.Fprintf(w, "firewall_blocks %d\n", metrics.FirewallBlocks)
+	fmt.Fprintf(w, "rate_limit_blocks %d\n", metrics.RateLimitBlocks)
+	fmt.Fprintf(w, "cooldown_blocks %d\n", metrics.CooldownBlocks)
+	fmt.Fprintf(w, "user_agent_blocks %d\n", metrics.UserAgentBlocks)
+	fmt.Fprintf(w, "payload_too_large %d\n", metrics.PayloadTooLarge)
+	fmt.Fprintf(w, "email_send_errors %d\n", metrics.EmailSendErrors)
+	fmt.Fprintf(w, "total_processing_time_ms %d\n", metrics.TotalProcessingTime)
 }
