@@ -1,7 +1,7 @@
 # 🟦 Build stage
 FROM golang:1.24 AS builder
 
-WORKDIR /app/cmd/server
+WORKDIR /app
 
 # Copia los archivos de dependencias primero
 COPY go.mod ./
@@ -10,6 +10,9 @@ RUN go mod download
 
 # Copia el resto del código
 COPY . .
+
+# Cambiamos al directorio donde está main.go
+WORKDIR /app/cmd/server
 
 # Compila el binario para Linux sin CGO
 RUN CGO_ENABLED=0 GOOS=linux go build -o /server
