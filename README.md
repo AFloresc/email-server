@@ -21,8 +21,45 @@ Optimizado para desplegarse en Render con un servidor ligero y seguro.
 
 ```text
 contact-service/
-├── main.go
+.
+├── cmd/
+│   └── server/
+│       └── main.go
+│
+├── internal/
+│   ├── config/
+│   │   └── config.go
+│   │
+│   ├── router/
+│   │   └── router.go
+│   │
+│   ├── handlers/
+│   │   └── contact.go
+│   │
+│   ├── email/
+│   │   └── resend.go
+│   │
+│   ├── security/
+│   │   ├── validate.go
+│   │   ├── sanitize.go
+│   │   ├── patterns.go
+│   │   └── ip_hash.go
+│   │
+│   ├── middleware/
+│   │   ├── rate_limit.go
+│   │   ├── cooldown.go
+│   │   ├── user_agent.go
+│   │   ├── body_limit.go
+│   │   └── metrics.go
+│   │
+│   ├── logging/
+│   │   └── logger.go
+│   │
+│   └── metrics/
+│       └── metrics.go
+│
 ├── go.mod
+├── go.sum
 └── Dockerfile
 ```
 
@@ -39,6 +76,7 @@ contact-service/
 ```text
 RESEND_API_KEY=tu_api_key
 TO_EMAIL=tu_correo_destino
+ALLOWED_ORIGINS=http://localhost:5173
 PORT=8080 (Render lo inyecta automáticamente)
 
 ```
@@ -48,6 +86,14 @@ PORT=8080 (Render lo inyecta automáticamente)
 ## ⚙️ Configuración de entorno en Render
 
 En Render → Dashboard → Environment Variables, añade:
+
+```text
+RESEND_API_KEY
+TO_EMAIL
+ALLOWED_ORIGINS
+- (Render añade PORT automáticamente)
+
+```
 
 ## 📡 API
 
@@ -82,7 +128,27 @@ El backend envía:
 - HTML premium con tu branding
 - Texto plano para compatibilidad
 - Reply‑To con el email del usuario
-- Logs del resultado de Resend
+- Logs estructurados del resultado de Resend
+
+## 📊 Métricas internas
+
+Disponible en:
+
+### `GET /metric`
+
+ncluye:
+
+- total_requests
+- successful_requests
+- validation_errors
+- honeypot_blocks
+- firewall_blocks
+- rate_limit_blocks
+- cooldown_blocks
+- user_agent_blocks
+- payload_too_large
+- email_send_errors
+- total_processing_time_ms
 
 ## 🛡️ CORS
 
@@ -97,15 +163,26 @@ Puedes añadir más orígenes según despliegues.
 ## ▶️ Ejecutar en local
 
 ```text
-go run main.go
+go run ./cmd/server
+```
+
+## 🐳 Docker
+
+El proyecto incluye un Dockerfile multi‑stage optimizado:
+
+```text
+docker build -t email-server .
+docker run -p 8080:8080 email-server
 ```
 
 ## 🚀 Deploy en Render
 
 - Crear nuevo servicio → Web Service
 - Seleccionar tu repo
-- Runtime: Go
-- Build Command:
+- Runtime: Docker
+- Render detecta el Dockerfile automáticamente
+- Añadir variables de entorno
+- Deploy
 
 ```text
     go build -o server .
@@ -165,3 +242,81 @@ MIT — libre para usar y modificar.
 ✔ Bots que envían patrones típicos de ataque
 
 ---
+
+## 🔄 Diagrama de flujo del request (POST /contact)
+
+```text
+┌──────────────────────────────┐
+│        Cliente (Frontend)    │
+└───────────────┬──────────────┘
+                │  POST /contact
+                ▼
+        ┌───────────────────────┐
+        │       Router          │
+        └───────────┬──────────┘
+                    │
+                    ▼
+        ┌───────────────────────┐
+        │   Middleware: Metrics │
+        └───────────┬──────────┘
+                    │
+                    ▼
+        ┌───────────────────────┐
+        │ Middleware: RateLimit │───┐
+        └───────────┬──────────┘   │ Too many requests
+                    │               │ → 429
+                    ▼               │
+        ┌───────────────────────┐   │
+        │ Middleware: Cooldown  │───┘
+        └───────────┬──────────┘
+                    │
+                    ▼
+        ┌──────────────────────────────┐
+        │ Middleware: User-Agent Check │───┐
+        └───────────┬──────────────────┘   │ UA sospechoso
+                    │                      │ → 403
+                    ▼                      │
+        ┌──────────────────────────────┐   │
+        │ Middleware: Body Size Limit  │───┘
+        └───────────┬──────────────────┘
+                    │
+                    ▼
+        ┌──────────────────────────────┐
+        │     Handler: /contact        │
+        └───────────┬──────────────────┘
+                    │
+                    ▼
+        ┌──────────────────────────────┐
+        │   Decodificar JSON (100KB)   │───┐
+        └───────────┬──────────────────┘   │ JSON inválido
+                    │                      │ → 400
+                    ▼                      │
+        ┌──────────────────────────────┐   │
+        │  security.ValidateContact    │───┘
+        ├──────────────────────────────┤
+        │ Honeypot → 403               │
+        │ Firewall → 403               │
+        │ Email inválido → 400         │
+        │ Mensaje inválido → 400       │
+        └───────────┬──────────────────┘
+                    │
+                    ▼
+        ┌──────────────────────────────┐
+        │  email.SendEmailResend       │───┐
+        └───────────┬──────────────────┘   │ Error enviando email
+                    │                      │ → 500
+                    ▼                      │
+        ┌──────────────────────────────┐   │
+        │   Resend API (externo)       │   │
+        └───────────┬──────────────────┘   │
+                    │                      │
+                    ▼                      │
+        ┌──────────────────────────────┐   │
+        │   Respuesta exitosa          │   │
+        └───────────┬──────────────────┘   │
+                    │
+                    ▼
+        ┌──────────────────────────────┐
+        │     { "status": "ok" }       │
+        └──────────────────────────────┘
+```
