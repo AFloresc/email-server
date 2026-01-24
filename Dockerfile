@@ -1,7 +1,7 @@
 # 🟦 Build stage
 FROM golang:1.24 AS builder
 
-WORKDIR /app
+WORKDIR /app/cmd/server
 
 # Copia los archivos de dependencias primero
 COPY go.mod ./
@@ -12,7 +12,7 @@ RUN go mod download
 COPY . .
 
 # Compila el binario para Linux sin CGO
-RUN CGO_ENABLED=0 GOOS=linux go build -o server .
+RUN CGO_ENABLED=0 GOOS=linux go build -o /server
 
 # 🟩 Run stage
 FROM alpine:latest
@@ -23,7 +23,7 @@ WORKDIR /root/
 RUN apk --no-cache add ca-certificates
 
 # Copia el binario compilado
-COPY --from=builder /app/server .
+COPY --from=builder /server .
 
 # Expone el puerto (Render detecta automáticamente)
 EXPOSE 10000
