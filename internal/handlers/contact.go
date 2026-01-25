@@ -2,12 +2,14 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"email-server/internal/config"
 	"email-server/internal/email"
+	emailstats "email-server/internal/emailstgats"
 	"email-server/internal/metrics"
 	"email-server/internal/security"
 )
@@ -84,10 +86,27 @@ func ContactHandler(cfg *config.Config) http.HandlerFunc {
 
 		slog.Info("Email sent successfully", "ipHash", ipHash, "email", req.Email)
 		metrics.Inc(&metrics.M.SuccessfulRequests)
+		emailstats.Increment()
+		checkEmailLimit(cfg)
 
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status":"ok"}`))
 
 		_ = time.Now() // placeholder si quieres añadir más métricas por request
+	}
+}
+
+func checkEmailLimit(cfg *config.Config) {
+	count := emailstats.GetCount()
+
+	if count >= 250 && !emailstats.HasSentTierAlert() {
+		email.SendAlertEmail(
+			cfg,
+			"ALERTA: Consumo de correos cercano al límite",
+			fmt.Sprintf("<p>Has enviado <strong>%d de 300</strong> correos este mes.</p>", count),
+			fmt.Sprintf("Has enviado %d de 300 correos este mes.", count),
+		)
+
+		emailstats.MarkTierAlertSent()
 	}
 }

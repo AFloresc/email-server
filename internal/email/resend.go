@@ -53,3 +53,70 @@ func SendEmailResend(cfg *config.Config, name, emailAddr, message string) error 
 	slog.Info("Resend response", "response", res)
 	return nil
 }
+
+func SendAlertEmail(cfg *config.Config, subject, htmlContent, textContent string) error {
+	client := resend.NewClient(cfg.ResendAPIKey)
+
+	htmlBody := alertHTMLWrapper(cfg, subject, htmlContent)
+	textBody := alertTextWrapper(cfg, subject, textContent)
+
+	params := &resend.SendEmailRequest{
+		From:    "System Alerts <onboarding@resend.dev>",
+		To:      []string{cfg.ToEmail},
+		Subject: subject,
+		Html:    htmlBody,
+		Text:    textBody,
+	}
+
+	res, err := client.Emails.Send(params)
+	if err != nil {
+		slog.Error("Resend alert error", "error", err.Error())
+		return err
+	}
+
+	slog.Info("Resend alert response", "response", res)
+	return nil
+}
+
+func alertHTMLWrapper(cfg *config.Config, title, content string) string {
+	return fmt.Sprintf(`
+		<div style="
+			font-family: 'Segoe UI', Roboto, sans-serif;
+			max-width: 600px;
+			margin: auto;
+			padding: 20px;
+			background-color: #ffffff;
+			border-radius: 12px;
+			border: 1px solid #e5e7eb;
+			box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+		">
+			<h2 style="
+				color: #b91c1c;
+				margin-bottom: 16px;
+				border-left: 4px solid #dc2626;
+				padding-left: 8px;
+			">
+				%s
+			</h2>
+
+			<div style="font-size: 14px; color: #111827; line-height: 1.6;">
+				%s
+			</div>
+
+			<hr style="margin: 24px 0; border: none; border-top: 1px solid #ddd;" />
+
+			<p style="font-size: 12px; color: #888;">
+				Alerta generada automáticamente por %s.
+			</p>
+		</div>
+	`, title, content, cfg.AppName)
+}
+
+func alertTextWrapper(cfg *config.Config, title, body string) string {
+	return fmt.Sprintf(
+		"%s\n\n%s\n\n— %s",
+		title,
+		body,
+		cfg.AppName,
+	)
+}
