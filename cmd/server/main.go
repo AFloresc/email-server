@@ -14,6 +14,7 @@ func main() {
 	slog.SetDefault(logger)
 
 	cfg := config.Load()
+	cfg.AppName = "Email Server"
 
 	slog.Info("Starting contact server", "port", cfg.Port)
 

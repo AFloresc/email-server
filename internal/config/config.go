@@ -10,6 +10,7 @@ type Config struct {
 	AllowedOrigins []string
 	ResendAPIKey   string
 	ToEmail        string
+	AppName        string
 }
 
 func Load() *Config {
