@@ -29,7 +29,7 @@ func Init(path string) error {
 	// Si no existe, creamos uno nuevo
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		stats = Stats{
-			Month:         int(time.Now().Month()) + 8,
+			Month:         int(time.Now().Month()),
 			Count:         0,
 			TierAlertSent: false,
 		}
