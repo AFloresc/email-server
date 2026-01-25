@@ -2,7 +2,9 @@ package emailstats
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -26,7 +28,13 @@ func Init(path string) error {
 
 	filePath = path
 
-	// Si no existe, creamos uno nuevo
+	// Crear carpeta si no existe
+	dir := filepath.Dir(filePath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create data directory: %w", err)
+	}
+
+	// Si no existe el archivo, crearlo con valores iniciales
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		stats = Stats{
 			Month:         int(time.Now().Month()),
@@ -36,14 +44,14 @@ func Init(path string) error {
 		return save()
 	}
 
-	// Si existe, lo cargamos
+	// Si existe, cargarlo
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read stats file: %w", err)
 	}
 
 	if err := json.Unmarshal(data, &stats); err != nil {
-		return err
+		return fmt.Errorf("failed to parse stats file: %w", err)
 	}
 
 	initialized = true
