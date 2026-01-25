@@ -20,7 +20,7 @@ func main() {
 	slog.Info("Starting contact server", "port", cfg.Port)
 
 	// Inicializar el contador mensual
-	if err := emailstats.Init("internal/data/email_stats.json"); err != nil {
+	if err := emailstats.Init("data/email_stats.json"); err != nil {
 		slog.Error("Failed to initialize email stats", "error", err)
 		os.Exit(1)
 	}
